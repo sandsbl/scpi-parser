@@ -219,7 +219,11 @@ scpi_bool_t SCPI_Parse(scpi_t * context, char * data, int len) {
                 result &= processCommand(context);
                 cmd_prev = state->programHeader;
             } else {
-                SCPI_ErrorPush(context, SCPI_ERROR_UNDEFINED_HEADER);
+                /* place undefined header with error */
+                /* calculate length of errornouse header and trim \r\n */
+                size_t r2 = r;
+                while (r2 > 0 && (data[r2 - 1] == '\r' || data[r2 - 1] == '\n')) r2--;
+                SCPI_ErrorPushEx(context, SCPI_ERROR_UNDEFINED_HEADER, data, r2);
                 result = FALSE;
             }
         }
@@ -242,18 +246,26 @@ scpi_bool_t SCPI_Parse(scpi_t * context, char * data, int len) {
 /**
  * Initialize SCPI context structure
  * @param context
- * @param command_list
- * @param buffer
+ * @param commands
  * @param interface
+ * @param units
+ * @param idn1
+ * @param idn2
+ * @param idn3
+ * @param idn4
+ * @param input_buffer
+ * @param input_buffer_length
+ * @param error_queue_data
+ * @param error_queue_size
  */
-void SCPI_Init(scpi_t * context, 
+void SCPI_Init(scpi_t * context,
         const scpi_command_t * commands,
         scpi_interface_t * interface,
         const scpi_unit_def_t * units,
         const char * idn1, const char * idn2, const char * idn3, const char * idn4,
-        char * input_buffer, size_t input_buffer_length, 
-        int16_t * error_queue_data, int16_t error_queue_size) {
-    memset(context, 0, sizeof(*context));
+        char * input_buffer, size_t input_buffer_length,
+        scpi_error_t * error_queue_data, int16_t error_queue_size) {
+    memset(context, 0, sizeof (*context));
     context->cmdlist = commands;
     context->interface = interface;
     context->units = units;
@@ -266,6 +278,21 @@ void SCPI_Init(scpi_t * context,
     context->buffer.position = 0;
     SCPI_ErrorInit(context, error_queue_data, error_queue_size);
 }
+
+#if USE_DEVICE_DEPENDENT_ERROR_INFORMATION && !USE_MEMORY_ALLOCATION_FREE
+
+/**
+ * Initialize context's
+ * @param context
+ * @param data
+ * @param len
+ * @return
+ */
+void SCPI_InitHeap(scpi_t * context,
+        char * error_info_heap, size_t error_info_heap_length) {
+    scpiheap_init(&context->error_info_heap, error_info_heap, error_info_heap_length);
+}
+#endif
 
 /**
  * Interface to the application. Adds data to system buffer and try to search
@@ -501,6 +528,76 @@ size_t SCPI_ResultText(scpi_t * context, const char * data) {
 }
 
 /**
+ * SCPI-99:21.8 Device-dependent error information.
+ * Write error information with the following syntax:
+ * <Error/event_number>,"<Error/event_description>[;<Device-dependent_info>]"
+ * The maximum string length of <Error/event_description> plus <Device-dependent_info>
+ * is SCPI_STD_ERROR_DESC_MAX_STRING_LENGTH (255) characters.
+ *
+ * @param context
+ * @param error
+ * @return
+ */
+size_t SCPI_ResultError(scpi_t * context, scpi_error_t * error) {
+    size_t result = 0;
+    size_t outputlimit = SCPI_STD_ERROR_DESC_MAX_STRING_LENGTH;
+    size_t step = 0;
+    const char * quote;
+
+    const char * data[SCPIDEFINE_DESCRIPTION_MAX_PARTS];
+    size_t len[SCPIDEFINE_DESCRIPTION_MAX_PARTS];
+    size_t i;
+
+    data[0] = SCPI_ErrorTranslate(error->error_code);
+    len[0] = strlen(data[0]);
+
+#if USE_DEVICE_DEPENDENT_ERROR_INFORMATION
+    data[1] = error->device_dependent_info;
+#if USE_MEMORY_ALLOCATION_FREE
+    len[1] = error->device_dependent_info ? strlen(data[1]) : 0;
+#else
+    SCPIDEFINE_get_parts(&context->error_info_heap, data[1], &len[1], &data[2], &len[2]);
+#endif
+#endif
+
+    result += SCPI_ResultInt32(context, error->error_code);
+    result += writeDelimiter(context);
+    result += writeData(context, "\"", 1);
+
+    for (i = 0; (i < SCPIDEFINE_DESCRIPTION_MAX_PARTS) && data[i] && outputlimit; i++) {
+        if (i == 1) {
+            result += writeSemicolon(context);
+            outputlimit -= 1;
+        }
+        if (len[i] > outputlimit) {
+            len[i] = outputlimit;
+        }
+
+        while ((quote = strnpbrk(data[i], len[i], "\""))) {
+            if ((step = quote - data[i] + 1) >= outputlimit) {
+                len[i] -= 1;
+                outputlimit -= 1;
+                break;
+            }
+            result += writeData(context, data[i], step);
+            result += writeData(context, "\"", 1);
+            len[i] -= step;
+            outputlimit -= step + 1;
+            data[i] = quote + 1;
+            if (len[i] > outputlimit) {
+                len[i] = outputlimit;
+            }
+        }
+
+        result += writeData(context, data[i], len[i]);
+        outputlimit -= len[i];
+    }
+    result += writeData(context, "\"", 1);
+
+    return result;
+}
+
+/**
  * Write arbitrary block header with length
  * @param context
  * @param len
@@ -602,7 +699,7 @@ scpi_bool_t SCPI_Parameter(scpi_t * context, scpi_parameter_t * parameter, scpi_
         if (mandatory) {
             SCPI_ErrorPush(context, SCPI_ERROR_MISSING_PARAMETER);
         } else {
-            parameter->type = SCPI_TOKEN_PROGRAM_MNEMONIC; // TODO: select something different
+            parameter->type = SCPI_TOKEN_PROGRAM_MNEMONIC; /* TODO: select something different */
         }
         return FALSE;
     }
@@ -1037,7 +1134,7 @@ scpi_bool_t SCPI_ParamCharacters(scpi_t * context, const char ** value, size_t *
                 break;
         }
 
-        // TODO: return also parameter type (ProgramMnemonic, ArbitraryBlockProgramData, SingleQuoteProgramData, DoubleQuoteProgramData
+        /* TODO: return also parameter type (ProgramMnemonic, ArbitraryBlockProgramData, SingleQuoteProgramData, DoubleQuoteProgramData */
     }
 
     return result;
@@ -1449,7 +1546,7 @@ scpi_bool_t SCPI_ParamErrorOccurred(scpi_t * context) {
  * @param format
  * @return
  */
-static size_t parserResultArrayBinary(scpi_t * context, const void * array, size_t count, size_t item_size, scpi_array_format_t format) {
+static size_t produceResultArrayBinary(scpi_t * context, const void * array, size_t count, size_t item_size, scpi_array_format_t format) {
 
     if (SCPI_GetNativeFormat() == format) {
         switch (item_size) {
@@ -1514,7 +1611,7 @@ static size_t parserResultArrayBinary(scpi_t * context, const void * array, size
             result += func(context, array[i]);\
         }\
     } else {\
-        result = parserResultArrayBinary(context, array, count, sizeof(*array), format);\
+        result = produceResultArrayBinary(context, array, count, sizeof(*array), format);\
     }\
     return result;\
 } while(0)
@@ -1637,4 +1734,96 @@ size_t SCPI_ResultArrayFloat(scpi_t * context, const float * array, size_t count
  */
 size_t SCPI_ResultArrayDouble(scpi_t * context, const double * array, size_t count, scpi_array_format_t format) {
     RESULT_ARRAY(SCPI_ResultDouble);
+}
+
+/*
+ * Template macro to generate all SCPI_ParamArrayXYZ function
+ */
+#define PARAM_ARRAY_TEMPLATE(func) do{\
+    if (format != SCPI_FORMAT_ASCII) return FALSE;\
+    for (*o_count = 0; *o_count < i_count; (*o_count)++) {\
+        if (!func(context, &data[*o_count], mandatory)) {\
+            break;\
+        }\
+        mandatory = FALSE;\
+    }\
+    return mandatory ? FALSE : TRUE;\
+}while(0)
+
+/**
+ * Read list of values up to i_count
+ * @param context
+ * @param data - array to fill
+ * @param i_count - number of elements of data
+ * @param o_count - real number of filled elements
+ * @param mandatory
+ * @return TRUE on success
+ */
+scpi_bool_t SCPI_ParamArrayInt32(scpi_t * context, int32_t *data, size_t i_count, size_t *o_count, scpi_array_format_t format, scpi_bool_t mandatory) {
+    PARAM_ARRAY_TEMPLATE(SCPI_ParamInt32);
+}
+
+/**
+ * Read list of values up to i_count
+ * @param context
+ * @param data - array to fill
+ * @param i_count - number of elements of data
+ * @param o_count - real number of filled elements
+ * @param mandatory
+ * @return TRUE on success
+ */
+scpi_bool_t SCPI_ParamArrayUInt32(scpi_t * context, uint32_t *data, size_t i_count, size_t *o_count, scpi_array_format_t format, scpi_bool_t mandatory) {
+    PARAM_ARRAY_TEMPLATE(SCPI_ParamUInt32);
+}
+
+/**
+ * Read list of values up to i_count
+ * @param context
+ * @param data - array to fill
+ * @param i_count - number of elements of data
+ * @param o_count - real number of filled elements
+ * @param mandatory
+ * @return TRUE on success
+ */
+scpi_bool_t SCPI_ParamArrayInt64(scpi_t * context, int64_t *data, size_t i_count, size_t *o_count, scpi_array_format_t format, scpi_bool_t mandatory) {
+    PARAM_ARRAY_TEMPLATE(SCPI_ParamInt64);
+}
+
+/**
+ * Read list of values up to i_count
+ * @param context
+ * @param data - array to fill
+ * @param i_count - number of elements of data
+ * @param o_count - real number of filled elements
+ * @param mandatory
+ * @return TRUE on success
+ */
+scpi_bool_t SCPI_ParamArrayUInt64(scpi_t * context, uint64_t *data, size_t i_count, size_t *o_count, scpi_array_format_t format, scpi_bool_t mandatory) {
+    PARAM_ARRAY_TEMPLATE(SCPI_ParamUInt64);
+}
+
+/**
+ * Read list of values up to i_count
+ * @param context
+ * @param data - array to fill
+ * @param i_count - number of elements of data
+ * @param o_count - real number of filled elements
+ * @param mandatory
+ * @return TRUE on success
+ */
+scpi_bool_t SCPI_ParamArrayFloat(scpi_t * context, float *data, size_t i_count, size_t *o_count, scpi_array_format_t format, scpi_bool_t mandatory) {
+    PARAM_ARRAY_TEMPLATE(SCPI_ParamFloat);
+}
+
+/**
+ * Read list of values up to i_count
+ * @param context
+ * @param data - array to fill
+ * @param i_count - number of elements of data
+ * @param o_count - real number of filled elements
+ * @param mandatory
+ * @return TRUE on success
+ */
+scpi_bool_t SCPI_ParamArrayDouble(scpi_t * context, double *data, size_t i_count, size_t *o_count, scpi_array_format_t format, scpi_bool_t mandatory) {
+    PARAM_ARRAY_TEMPLATE(SCPI_ParamDouble);
 }

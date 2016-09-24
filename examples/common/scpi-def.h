@@ -13,7 +13,7 @@
 extern const scpi_command_t scpi_commands[];
 extern scpi_interface_t scpi_interface;
 extern char scpi_input_buffer[];
-extern int16_t scpi_error_queue_data[];
+extern scpi_error_t scpi_error_queue_data[];
 extern scpi_t scpi_context;
 
 size_t SCPI_Write(scpi_t * context, const char * data, size_t len);
@@ -25,5 +25,5 @@ scpi_result_t SCPI_Flush(scpi_t * context);
 
 scpi_result_t SCPI_SystemCommTcpipControlQ(scpi_t * context);
 
-#endif // __SCPI_DEF_H_
+#endif /* __SCPI_DEF_H_ */
 

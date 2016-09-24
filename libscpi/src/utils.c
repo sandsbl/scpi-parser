@@ -98,25 +98,23 @@ size_t UInt32ToStrBaseSign(uint32_t val, char * str, size_t len, int8_t base, sc
             case 8:
                 x = 0x40000000L;
                 break;
+            default:
             case 10:
+                base = 10;
                 x = 1000000000L;
                 break;
             case 16:
                 x = 0x10000000L;
                 break;
-            default:
-                x = 1000000000L;
-                base = 10;
-                break;
         }
 
-        // add sign for numbers in base 10
+        /* add sign for numbers in base 10 */
         if (sign && ((int32_t) val < 0) && (base == 10)) {
             uval = -val;
             ADD_CHAR('-');
         }
 
-        // remove leading zeros
+        /* remove leading zeros */
         while ((uval / x) == 0) {
             x /= base;
         }
@@ -186,25 +184,23 @@ size_t UInt64ToStrBaseSign(uint64_t val, char * str, size_t len, int8_t base, sc
             case 8:
                 x = 0x8000000000000000ULL;
                 break;
+            default:
             case 10:
                 x = 10000000000000000000ULL;
+                base = 10;
                 break;
             case 16:
                 x = 0x1000000000000000ULL;
                 break;
-            default:
-                x = 10000000000000000000ULL;
-                base = 10;
-                break;
         }
 
-        // add sign for numbers in base 10
+        /* add sign for numbers in base 10 */
         if (sign && ((int64_t) val < 0) && (base == 10)) {
             uval = -val;
             ADD_CHAR('-');
         }
 
-        // remove leading zeros
+        /* remove leading zeros */
         while ((uval / x) == 0) {
             x /= base;
         }
@@ -253,7 +249,8 @@ size_t SCPI_UInt64ToStrBase(uint64_t val, char * str, size_t len, int8_t base) {
  * @return number of bytes written to str (without '\0')
  */
 size_t SCPI_FloatToStr(float val, char * str, size_t len) {
-    return SCPIDEFINE_floatToStr(val, str, len);
+    SCPIDEFINE_floatToStr(val, str, len);
+    return strlen(str);
 }
 
 /**
@@ -264,7 +261,8 @@ size_t SCPI_FloatToStr(float val, char * str, size_t len) {
  * @return number of bytes written to str (without '\0')
  */
 size_t SCPI_DoubleToStr(double val, char * str, size_t len) {
-    return SCPIDEFINE_doubleToStr(val, str, len);
+    SCPIDEFINE_doubleToStr(val, str, len);
+    return strlen(str);
 }
 
 /**
@@ -299,7 +297,7 @@ size_t strBaseToUInt32(const char * str, uint32_t * val, int8_t base) {
  */
 size_t strBaseToInt64(const char * str, int64_t * val, int8_t base) {
     char * endptr;
-    *val = strtoll(str, &endptr, base);
+    *val = SCPIDEFINE_strtoll(str, &endptr, base);
     return endptr - str;
 }
 
@@ -311,7 +309,7 @@ size_t strBaseToInt64(const char * str, int64_t * val, int8_t base) {
  */
 size_t strBaseToUInt64(const char * str, uint64_t * val, int8_t base) {
     char * endptr;
-    *val = strtoull(str, &endptr, base);
+    *val = SCPIDEFINE_strtoull(str, &endptr, base);
     return endptr - str;
 }
 
@@ -323,7 +321,7 @@ size_t strBaseToUInt64(const char * str, uint64_t * val, int8_t base) {
  */
 size_t strToFloat(const char * str, float * val) {
     char * endptr;
-    *val = strtof(str, &endptr);
+    *val = SCPIDEFINE_strtof(str, &endptr);
     return endptr - str;
 }
 
@@ -380,7 +378,7 @@ scpi_bool_t compareStrAndNum(const char * str1, size_t len1, const char * str2, 
 
         if (num) {
             if (len1 == len2) {
-                //*num = 1;
+                /* *num = 1; */
             } else {
                 int32_t tmpNum;
                 i = len1 + strBaseToInt32(str2 + len1, &tmpNum, 10);
@@ -532,11 +530,11 @@ scpi_bool_t matchCommand(const char * pattern, const char * cmd, size_t len, int
     }
 
     /* now support optional keywords in pattern style, e.g. [:MEASure]:VOLTage:DC? */
-    if (pattern_ptr[0] == '[') { // skip first '['
+    if (pattern_ptr[0] == '[') { /* skip first '[' */
         SKIP_PATTERN(1);
         brackets++;
     }
-    if (pattern_ptr[0] == ':') { // skip first ':'
+    if (pattern_ptr[0] == ':') { /* skip first ':' */
         SKIP_PATTERN(1);
     }
 
@@ -559,7 +557,7 @@ scpi_bool_t matchCommand(const char * pattern, const char * cmd, size_t len, int
         if ((pattern_sep_pos > 0) && pattern_ptr[pattern_sep_pos - 1] == '#') {
             if (numbers && (numbers_idx < numbers_len)) {
                 number_ptr = numbers + numbers_idx;
-                *number_ptr = default_value; // default value
+                *number_ptr = default_value; /* default value */
             } else {
                 number_ptr = NULL;
             }
@@ -586,7 +584,7 @@ scpi_bool_t matchCommand(const char * pattern, const char * cmd, size_t len, int
 
             /* command complete, but pattern not */
             if (cmd_len == 0) {
-                // verify all subsequent pattern parts are also optional
+                /* verify all subsequent pattern parts are also optional */
                 while (pattern_len) {
                     pattern_sep_pos = patternSeparatorPos(pattern_ptr, pattern_len);
                     switch (pattern_ptr[pattern_sep_pos]) {
@@ -624,14 +622,14 @@ scpi_bool_t matchCommand(const char * pattern, const char * cmd, size_t len, int
                     && (pattern_ptr[1] == cmd_ptr[0])
                     && (pattern_ptr[0] == '[')
                     && (pattern_ptr[1] == ':')) {
-                SKIP_PATTERN(2); // for skip '[' in "[:"
+                SKIP_PATTERN(2); /* for skip '[' in "[:" */
                 SKIP_CMD(1);
                 brackets++;
             } else if ((pattern_len > 1)
                     && (pattern_ptr[1] == cmd_ptr[0])
                     && (pattern_ptr[0] == ']')
                     && (pattern_ptr[1] == ':')) {
-                SKIP_PATTERN(2); // for skip ']' in "]:"
+                SKIP_PATTERN(2); /* for skip ']' in "]:" */
                 SKIP_CMD(1);
                 brackets--;
             } else if ((pattern_len > 2)
@@ -639,10 +637,10 @@ scpi_bool_t matchCommand(const char * pattern, const char * cmd, size_t len, int
                     && (pattern_ptr[0] == ']')
                     && (pattern_ptr[1] == '[')
                     && (pattern_ptr[2] == ':')) {
-                SKIP_PATTERN(3); // for skip '][' in "][:"
+                SKIP_PATTERN(3); /* for skip '][' in "][:" */
                 SKIP_CMD(1);
-                //brackets++;
-                //brackets--;
+                /* brackets++; */
+                /* brackets--; */
             } else {
                 result = FALSE;
                 break;
@@ -650,14 +648,14 @@ scpi_bool_t matchCommand(const char * pattern, const char * cmd, size_t len, int
         } else {
             SKIP_PATTERN(pattern_sep_pos);
             if ((pattern_ptr[0] == ']') && (pattern_ptr[1] == ':')) {
-                SKIP_PATTERN(2); // for skip ']' in "]:" , pattern_ptr continue, while cmd_ptr remain unchanged
+                SKIP_PATTERN(2); /* for skip ']' in "]:" , pattern_ptr continue, while cmd_ptr remain unchanged */
                 brackets--;
             } else if ((pattern_len > 2) && (pattern_ptr[0] == ']')
                     && (pattern_ptr[1] == '[')
                     && (pattern_ptr[2] == ':')) {
-                SKIP_PATTERN(3); // for skip ']' in "][:" , pattern_ptr continue, while cmd_ptr remain unchanged
-                //brackets++;
-                //brackets--;
+                SKIP_PATTERN(3); /* for skip ']' in "][:" , pattern_ptr continue, while cmd_ptr remain unchanged */
+                /* brackets++; */
+                /* brackets--; */
             } else {
                 result = FALSE;
                 break;
@@ -754,109 +752,270 @@ int OUR_strncasecmp(const char *s1, const char *s2, size_t n) {
 }
 #endif
 
-// Floating point to string conversion routines
-//
-// Copyright (C) 2002 Michael Ringgaard. All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions
-// are met:
-//
-// 1. Redistributions of source code must retain the above copyright
-//    notice, this list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright
-//    notice, this list of conditions and the following disclaimer in the
-//    documentation and/or other materials provided with the distribution.
-// 3. Neither the name of the project nor the names of its contributors
-//    may be used to endorse or promote products derived from this software
-//    without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-// OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-// HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-// LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-// OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-// SUCH DAMAGE.
+#if !HAVE_STRNDUP
+char *OUR_strndup(const char *s, size_t n) {
+    size_t len = SCPIDEFINE_strnlen(s, n);
+    char * result = malloc(len + 1);
+    if (!result) {
+        return NULL;
+    }
+    memcpy(result, s, len);
+    result[len] = '\0';
+    return result;
+}
+#endif
+
+#if USE_DEVICE_DEPENDENT_ERROR_INFORMATION && !USE_MEMORY_ALLOCATION_FREE
+
+/**
+ * Initialize heap structure
+ * @param heap - pointer to manual allocated heap buffer
+ * @param error_info_heap - buffer for the heap
+ * @param error_info_heap_length - length of the heap
+ */
+void scpiheap_init(scpi_error_info_heap_t * heap, char * error_info_heap, size_t error_info_heap_length)
+{
+    heap->data = error_info_heap;
+    heap->wr = 0;
+    heap->size = error_info_heap_length;
+    heap->count = heap->size;
+    memset(heap->data, 0, heap->size);
+}
+
+/**
+ * Duplicate string if "strdup" ("malloc/free") not supported on system.
+ * Allocate space in heap if it possible
+ *
+ * @param heap - pointer to manual allocated heap buffer
+ * @param s - current pointer of duplication string
+ * @return - pointer of duplicated string or NULL, if duplicate is not possible.
+ */
+char * scpiheap_strndup(scpi_error_info_heap_t * heap, const char *s, size_t n) {
+    if (!s || !heap || !heap->size) {
+        return NULL;
+    }
+
+    if (heap->data[heap->wr] != '\0') {
+        return NULL;
+    }
+
+    if (*s == '\0') {
+        return NULL;
+    }
+
+    size_t len = SCPIDEFINE_strnlen(s, n) + 1; /* additional '\0' at end */
+    if (len > heap->count) {
+        return NULL;
+    }
+    const char * ptrs = s;
+    char * head = &heap->data[heap->wr];
+    size_t rem = heap->size - (&heap->data[heap->wr] - heap->data);
+
+    if (len >= rem) {
+        memcpy(&heap->data[heap->wr], s, rem);
+        len = len - rem;
+        ptrs += rem;
+        heap->wr = 0;
+        heap->count -= rem;
+    }
+
+    memcpy(&heap->data[heap->wr], ptrs, len);
+    heap->wr += len;
+    heap->count -= len;
+
+    /* ensure '\0' a the end */
+    if (heap->wr > 0) {
+        heap->data[heap->wr - 1] = '\0';
+    } else {
+        heap->data[heap->size - 1] = '\0';
+    }
+    return head;
+}
+
+/**
+ * Return pointers and lengths two parts of string in the circular buffer from heap
+ *
+ * @param heap - pointer to manual allocated heap buffer
+ * @param s - pointer of duplicate string.
+ * @return len1 - lenght of first part of string.
+ * @return s2 - pointer of second part of string, if string splited .
+ * @return len2 - lenght of second part of string.
+ */
+scpi_bool_t scpiheap_get_parts(scpi_error_info_heap_t * heap, const char * s, size_t * len1, const char ** s2, size_t * len2) {
+    if (!heap || !s || !len1 || !s2 || !len2) {
+        return FALSE;
+    }
+
+    if (*s == '\0') {
+        return FALSE;
+    }
+
+    *len1 = 0;
+    size_t rem = heap->size - (s - heap->data);
+    *len1 = strnlen(s, rem);
+
+    if (&s[*len1 - 1] == &heap->data[heap->size - 1]) {
+        *s2 = heap->data;
+        *len2 = strnlen(*s2, heap->size);
+    } else {
+        *s2 = NULL;
+        *len2 = 0;
+    }
+    return TRUE;
+}
+
+/**
+ * Frees space in heap, if "malloc/free" not supported on system, or nothing.
+ *
+ * @param heap - pointer to manual allocated heap buffer
+ * @param s - pointer of duplicate string
+ * @param rollback - backward write pointer in heap
+ */
+void scpiheap_free(scpi_error_info_heap_t * heap, char * s, scpi_bool_t rollback) {
+
+    if (!s) return;
+
+    char * data_add;
+    size_t len[2];
+
+    if (!scpiheap_get_parts(heap, s, &len[0], (const char **)&data_add, &len[1])) return;
+
+    if (data_add) {
+        len[1]++;
+        memset(data_add, 0, len[1]);
+        heap->count += len[1];
+    } else {
+        len[0]++;
+    }
+    memset(s, 0, len[0]);
+    heap->count += len[0];
+    if (heap->count == heap->size) {
+        heap->wr = 0;
+        return;
+    }
+    if (rollback) {
+        size_t rb = len[0] + len[1];
+        if (rb > heap->wr) {
+            heap->wr += heap->size;
+        }
+        heap->wr -= rb;
+    }
+}
+
+#endif
+
+/*
+ * Floating point to string conversion routines
+ *
+ * Copyright (C) 2002 Michael Ringgaard. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the project nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
 
 static char *scpi_ecvt(double arg, int ndigits, int *decpt, int *sign, char *buf, size_t bufsize) {
-    int r2;
+    int r1, r2;
     double fi, fj;
-    char *p, *p1;
+    int w1, w2;
 
     if (ndigits < 0) ndigits = 0;
     if (ndigits >= (int) (bufsize - 1)) ndigits = bufsize - 2;
+
     r2 = 0;
     *sign = 0;
-    p = &buf[0];
+    w1 = 0;
     if (arg < 0) {
         *sign = 1;
         arg = -arg;
     }
+    frexp(arg, &r1);
     arg = modf(arg, &fi);
-    p1 = &buf[bufsize];
 
     if (fi != 0) {
-        p1 = &buf[bufsize];
+        r1 = r1 * 308 / 1024 - ndigits;
+        w2 = bufsize;
+        while (r1 > 0) {
+            fj = modf(fi / 10, &fi);
+            r2++;
+            r1--;
+        }
         while (fi != 0) {
             fj = modf(fi / 10, &fi);
-            *--p1 = (int) ((fj + .03) * 10) + '0';
+            buf[--w2] = (int) ((fj + .03) * 10) + '0';
             r2++;
         }
-        while (p1 < &buf[bufsize]) *p++ = *p1++;
+        while (w2 < (int) bufsize) buf[w1++] = buf[w2++];
     } else if (arg > 0) {
         while ((fj = arg * 10) < 1) {
             arg = fj;
             r2--;
         }
     }
-    p1 = &buf[ndigits];
+    w2 = ndigits;
     *decpt = r2;
-    if (p1 < &buf[0]) {
+    if (w2 < 0) {
         buf[0] = '\0';
         return buf;
     }
-    while (p <= p1 && p < &buf[bufsize]) {
+    while (w1 <= w2 && w1 < (int) bufsize) {
         arg *= 10;
         arg = modf(arg, &fj);
-        *p++ = (int) fj + '0';
+        buf[w1++] = (int) fj + '0';
     }
-    if (p1 >= &buf[bufsize]) {
+    if (w2 >= (int) bufsize) {
         buf[bufsize - 1] = '\0';
         return buf;
     }
-    p = p1;
-    *p1 += 5;
-    while (*p1 > '9') {
-        *p1 = '0';
-        if (p1 > buf) {
-            ++*--p1;
+    w1 = w2;
+    buf[w2] += 5;
+    while (buf[w2] > '9') {
+        buf[w2] = '0';
+        if (w2 > 0) {
+            ++buf[--w2];
         } else {
-            *p1 = '1';
+            buf[w2] = '1';
             (*decpt)++;
         }
     }
-    *p = '\0';
+    buf[w1] = '\0';
     return buf;
 }
 
-#define SCPI_DTOSTRE_BUFFER_SIZE 310
+#define SCPI_DTOSTRE_BUFFER_SIZE 32
 
 char * SCPI_dtostre(double __val, char * __s, size_t __ssize, unsigned char __prec, unsigned char __flags) {
     char buffer[SCPI_DTOSTRE_BUFFER_SIZE];
 
-    int sign = signbit(__val);
+    int sign = SCPIDEFINE_signbit(__val);
     char * s = buffer;
     int decpt;
     if (sign) {
         __val = -__val;
         s[0] = '-';
         s++;
-    } else if (!isnan(__val)) {
+    } else if (!SCPIDEFINE_isnan(__val)) {
         if (SCPI_DTOSTRE_PLUS_SIGN & __flags) {
             s[0] = '+';
             s++;
@@ -866,13 +1025,14 @@ char * SCPI_dtostre(double __val, char * __s, size_t __ssize, unsigned char __pr
         }
     }
 
-    if (!isfinite(__val)) {
-        if (isnan(__val)) {
+    if (!SCPIDEFINE_isfinite(__val)) {
+        if (SCPIDEFINE_isnan(__val)) {
             strcpy(s, (__flags & SCPI_DTOSTRE_UPPERCASE) ? "NAN" : "nan");
         } else {
             strcpy(s, (__flags & SCPI_DTOSTRE_UPPERCASE) ? "INF" : "inf");
         }
         strncpy(__s, buffer, __ssize);
+        __s[__ssize - 1] = '\0';
         return __s;
     }
 
@@ -926,14 +1086,16 @@ char * SCPI_dtostre(double __val, char * __s, size_t __ssize, unsigned char __pr
     }
 
     strncpy(__s, buffer, __ssize);
+    __s[__ssize - 1] = '\0';
     return __s;
 }
 
 /**
  * Get native CPU endiannes
- * @return 
+ * @return
  */
 scpi_array_format_t SCPI_GetNativeFormat(void) {
+
     union {
         uint32_t i;
         char c[4];
@@ -945,37 +1107,37 @@ scpi_array_format_t SCPI_GetNativeFormat(void) {
 /**
  * Swap 16bit number
  * @param val
- * @return 
+ * @return
  */
 uint16_t SCPI_Swap16(uint16_t val) {
-    return ((val & 0x00FF) << 8) | 
+    return ((val & 0x00FF) << 8) |
             ((val & 0xFF00) >> 8);
 }
 
 /**
  * Swap 32bit number
  * @param val
- * @return 
+ * @return
  */
 uint32_t SCPI_Swap32(uint32_t val) {
-    return ((val & 0x000000FF) << 24) |
-            ((val & 0x0000FF00) << 8) |
-            ((val & 0x00FF0000) >> 8) |
-            ((val & 0xFF000000) >> 24);
+    return ((val & 0x000000FFul) << 24) |
+            ((val & 0x0000FF00ul) << 8) |
+            ((val & 0x00FF0000ul) >> 8) |
+            ((val & 0xFF000000ul) >> 24);
 }
 
 /**
  * Swap 64bit number
  * @param val
- * @return 
+ * @return
  */
 uint64_t SCPI_Swap64(uint64_t val) {
-    return ((val & 0x00000000000000FFul) << 56) |
-            ((val & 0x000000000000FF00ul) << 40) |
-            ((val & 0x0000000000FF0000ul) << 24) |
-            ((val & 0x00000000FF000000ul) << 8) |
-            ((val & 0x000000FF00000000ul) >> 8) |
-            ((val & 0x0000FF0000000000ul) >> 24) |
-            ((val & 0x00FF000000000000ul) >> 40) |
-            ((val & 0xFF00000000000000ul) >> 56);
+    return ((val & 0x00000000000000FFull) << 56) |
+            ((val & 0x000000000000FF00ull) << 40) |
+            ((val & 0x0000000000FF0000ull) << 24) |
+            ((val & 0x00000000FF000000ull) << 8) |
+            ((val & 0x000000FF00000000ull) >> 8) |
+            ((val & 0x0000FF0000000000ull) >> 24) |
+            ((val & 0x00FF000000000000ull) >> 40) |
+            ((val & 0xFF00000000000000ull) >> 56);
 }
